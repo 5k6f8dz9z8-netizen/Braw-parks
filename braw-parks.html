@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Braw Parks — Scotland's Playpark Directory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{
+    --ink:#221f1c;
+    --thistle:#3b2f4f;
+    --thistle-dim:#5a4a73;
+    --moss:#42583a;
+    --moss-light:#5c7a51;
+    --sandstone:#f2ead9;
+    --sandstone-deep:#e7dabd;
+    --paper:#fbf7ee;
+    --heather:#9b5f8f;
+    --mist:#7c93a3;
+    --line:#d8caa9;
+    --amber:#c17a2e;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--sandstone);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    background-image:
+      radial-gradient(circle at 15% 20%, rgba(59,47,79,0.05) 0, transparent 40%),
+      radial-gradient(circle at 85% 75%, rgba(66,88,58,0.06) 0, transparent 45%);
+  }
+
+  /* ---------- topographic contour header ---------- */
+  .contour-band{
+    position:relative;
+    background:var(--thistle);
+    color:var(--paper);
+    overflow:hidden;
+  }
+  .contour-band svg{position:absolute; inset:0; width:100%; height:100%; opacity:0.16;}
+  .header-inner{
+    position:relative; z-index:2;
+    max-width:1200px; margin:0 auto;
+    padding:22px 24px 18px;
+    display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap;
+  }
+  .brand-eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:#c9b9e0; margin-bottom:6px;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:700;
+    font-size:clamp(30px,4.5vw,44px);
+    margin:0; line-height:1;
+    letter-spacing:-0.01em;
+  }
+  h1 em{font-style:italic; font-weight:400; color:#d8c7ee;}
+  .tagline{
+    font-size:14.5px; color:#d9d0e6; margin-top:8px; max-width:440px; line-height:1.45;
+  }
+  .stat-tag{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px; color:#ecd9b8;
+    border:1px solid rgba(255,255,255,0.25);
+    border-radius:999px;
+    padding:6px 14px;
+    white-space:nowrap;
+  }
+
+  /* ---------- controls ---------- */
+  .controls-wrap{
+    max-width:1200px; margin:0 auto;
+    padding:18px 24px 0;
+  }
+  .toolbar{
+    display:flex; gap:12px; flex-wrap:wrap; align-items:center;
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:12px 14px;
+    box-shadow:0 1px 0 rgba(59,47,79,0.04);
+  }
+  .search-box{
+    flex:1 1 220px; position:relative;
+  }
+  .search-box input{
+    width:100%;
+    padding:10px 14px 10px 34px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:#fff;
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    color:var(--ink);
+  }
+  .search-box input:focus{outline:2px solid var(--moss-light); outline-offset:1px;}
+  .search-box::before{
+    content:"⌕";
+    position:absolute; left:11px; top:50%; transform:translateY(-50%);
+    color:var(--mist); font-size:16px; pointer-events:none;
+  }
+  select{
+    padding:9px 12px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:#fff;
+    font-family:'Inter',sans-serif;
+    font-size:13.5px;
+    color:var(--ink);
+    max-width:170px;
+  }
+  select:focus{outline:2px solid var(--moss-light);}
+  .view-toggle{
+    display:flex; background:var(--sandstone-deep); border-radius:10px; padding:3px; gap:2px;
+  }
+  .view-toggle button{
+    border:none; background:transparent; padding:8px 16px; border-radius:8px;
+    font-family:'Inter',sans-serif; font-weight:600; font-size:13.5px; color:var(--thistle-dim);
+    cursor:pointer; transition:.15s;
+  }
+  .view-toggle button.active{background:var(--thistle); color:#fff;}
+
+  .chip-row{
+    display:flex; gap:8px; flex-wrap:wrap;
+    max-width:1200px; margin:12px auto 0; padding:0 24px;
+  }
+  .chip{
+    font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600;
+    padding:6px 13px; border-radius:999px;
+    border:1px solid var(--line); background:#fff; color:var(--thistle-dim);
+    cursor:pointer; user-select:none; transition:.15s;
+  }
+  .chip.on{background:var(--moss); border-color:var(--moss); color:#fff;}
+  .result-count{
+    max-width:1200px; margin:14px auto 0; padding:0 24px;
+    font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--mist);
+  }
+
+  /* ---------- main area ---------- */
+  main{max-width:1200px; margin:0 auto; padding:14px 24px 60px;}
+
+  /* map */
+  #mapView{display:none;}
+  #mapView.active{display:block;}
+  #leafletMap{
+    height:64vh; min-height:420px; border-radius:16px; border:1px solid var(--line);
+    box-shadow:0 2px 10px rgba(59,47,79,0.08);
+  }
+  .map-legend{
+    display:flex; gap:16px; flex-wrap:wrap; margin-top:10px;
+    font-size:12px; color:var(--thistle-dim); font-family:'JetBrains Mono',monospace;
+  }
+  .map-legend span{display:inline-flex; align-items:center; gap:6px;}
+  .dot{width:9px; height:9px; border-radius:50%; display:inline-block;}
+
+  /* list */
+  #listView{display:none;}
+  #listView.active{display:grid;}
+  #listView{
+    grid-template-columns:repeat(auto-fill, minmax(300px,1fr));
+    gap:16px;
+  }
+  .card{
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:18px 18px 16px;
+    position:relative;
+    transition:transform .15s, box-shadow .15s;
+  }
+  .card:hover{transform:translateY(-2px); box-shadow:0 8px 20px rgba(59,47,79,0.10);}
+  .card-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  .card-region{
+    font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--heather); margin-bottom:4px; display:block;
+  }
+  .card h3{
+    font-family:'Fraunces',serif; font-size:19px; margin:0 0 3px; line-height:1.15; font-weight:600;
+  }
+  .card .town{font-size:12.5px; color:var(--mist); margin-bottom:10px;}
+  .visited-btn{
+    border:1.5px solid var(--line); background:#fff; border-radius:9px;
+    width:34px; height:34px; flex:0 0 34px; cursor:pointer; font-size:16px;
+    display:flex; align-items:center; justify-content:center; transition:.15s;
+  }
+  .visited-btn.on{background:var(--moss); border-color:var(--moss); color:#fff;}
+  .blurb{font-size:13.5px; line-height:1.55; color:#4a453f; margin:0 0 12px;}
+  .tag-row{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;}
+  .tag{
+    font-size:11px; font-weight:600; padding:4px 9px; border-radius:7px;
+    background:var(--sandstone-deep); color:var(--moss);
+  }
+  .tag.paid{background:#f3ded0; color:var(--amber);}
+  .tag.free{background:#e2ead9; color:var(--moss);}
+  .card-foot{display:flex; justify-content:space-between; align-items:center; margin-top:4px; flex-wrap:wrap; gap:8px 14px;}
+  .age-badge{font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--thistle-dim);}
+  .directions{
+    font-size:12.5px; font-weight:600; color:var(--thistle);
+    text-decoration:none; border-bottom:1.5px solid var(--heather); padding-bottom:1px;
+  }
+  .directions:hover{color:var(--heather);}
+
+  /* ---------- sponsor slot ---------- */
+  .sponsor-banner{
+    max-width:1200px; margin:14px auto 0; padding:0 24px;
+  }
+  .sponsor-inner{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    background:linear-gradient(100deg, #efe3f0, #f2ead9);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:12px 16px;
+  }
+  .sponsor-eyebrow{
+    font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--heather); font-weight:600; flex:0 0 auto;
+    background:#fff; border:1px solid var(--line); border-radius:999px; padding:4px 10px;
+  }
+  .sponsor-logo{
+    width:34px; height:34px; border-radius:8px; object-fit:cover; flex:0 0 auto; background:#fff;
+  }
+  .sponsor-text{flex:1 1 200px; font-size:13.5px; color:var(--ink); line-height:1.4;}
+  .sponsor-text strong{color:var(--thistle);}
+  .sponsor-link{
+    flex:0 0 auto; font-size:13px; font-weight:700; color:#fff; background:var(--thistle);
+    padding:8px 15px; border-radius:9px; text-decoration:none; white-space:nowrap;
+  }
+  .sponsor-link:hover{background:var(--heather);}
+  .sponsor-empty{
+    font-size:12.5px; color:var(--mist); text-align:center; padding:2px 4px;
+  }
+  .sponsor-empty a{color:var(--thistle-dim); font-weight:600;}
+
+  .featured-tag{
+    display:inline-flex; align-items:center; gap:4px;
+    font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+    background:var(--heather); color:#fff; border-radius:6px; padding:3px 8px; margin-bottom:6px;
+  }
+  .card.is-featured{border-color:var(--heather); box-shadow:0 0 0 1px var(--heather) inset;}
+
+  /* ---------- photos ---------- */
+  .photo-strip{
+    display:flex; gap:7px; margin-bottom:12px; overflow-x:auto; padding-bottom:2px;
+  }
+  .photo-thumb{
+    position:relative; flex:0 0 auto; width:72px; height:72px; border-radius:9px; overflow:hidden;
+    border:1px solid var(--line); cursor:pointer; background:var(--sandstone-deep);
+  }
+  .photo-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .photo-thumb .remove-photo{
+    position:absolute; top:2px; right:2px; width:18px; height:18px; border-radius:50%;
+    background:rgba(34,31,28,0.7); color:#fff; border:none; font-size:11px; line-height:1;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .photo-add-tile{
+    flex:0 0 auto; width:72px; height:72px; border-radius:9px;
+    border:1.5px dashed var(--line); background:transparent; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-size:11px; color:var(--mist); gap:2px; font-family:'Inter',sans-serif;
+  }
+  .photo-add-tile:hover{border-color:var(--moss-light); color:var(--moss);}
+  .photo-add-tile .plus{font-size:18px; line-height:1;}
+  .search-photos-link{
+    font-size:12.5px; font-weight:600; color:var(--thistle);
+    text-decoration:none; border-bottom:1.5px solid var(--heather); padding-bottom:1px;
+  }
+  .search-photos-link:hover{color:var(--heather);}
+
+  /* add-photo modal */
+  .modal-backdrop{
+    display:none; position:fixed; inset:0; background:rgba(34,31,28,0.55);
+    z-index:1000; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-backdrop.open{display:flex;}
+  .modal-box{
+    background:var(--paper); border-radius:16px; padding:22px; width:100%; max-width:400px;
+    border:1px solid var(--line);
+  }
+  .modal-box h4{font-family:'Fraunces',serif; margin:0 0 4px; font-size:18px;}
+  .modal-box .sub{font-size:12.5px; color:var(--mist); margin-bottom:14px; line-height:1.45;}
+  .modal-box input{
+    width:100%; padding:10px 12px; border-radius:9px; border:1px solid var(--line);
+    font-family:'Inter',sans-serif; font-size:13.5px; margin-bottom:10px;
+  }
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:6px;}
+  .btn{
+    font-family:'Inter',sans-serif; font-weight:600; font-size:13px; padding:9px 16px;
+    border-radius:9px; border:1px solid var(--line); background:#fff; cursor:pointer; color:var(--thistle-dim);
+  }
+  .btn.primary{background:var(--moss); border-color:var(--moss); color:#fff;}
+  .modal-error{font-size:12px; color:#a5432a; margin:-4px 0 10px; display:none;}
+
+  /* lightbox */
+  .lightbox{
+    display:none; position:fixed; inset:0; background:rgba(20,17,14,0.9); z-index:1100;
+    align-items:center; justify-content:center; padding:30px;
+  }
+  .lightbox.open{display:flex;}
+  .lightbox img{max-width:100%; max-height:85vh; border-radius:10px;}
+  .lightbox-close{
+    position:absolute; top:20px; right:24px; background:none; border:none; color:#fff;
+    font-size:28px; cursor:pointer; line-height:1;
+  }
+
+  .leaflet-popup-content-wrapper{border-radius:12px; font-family:'Inter',sans-serif;}
+  .popup-title{font-family:'Fraunces',serif; font-weight:600; font-size:15px; margin:0 0 3px;}
+  .popup-town{font-size:11.5px; color:var(--mist); margin-bottom:6px;}
+  .popup-blurb{font-size:12.5px; line-height:1.4; margin:0 0 8px;}
+  .popup-link{font-size:12px; font-weight:600; color:var(--thistle);}
+
+  .empty-state{
+    grid-column:1/-1; text-align:center; padding:50px 20px; color:var(--mist);
+    font-family:'Inter',sans-serif; font-size:14px;
+  }
+
+  footer{
+    max-width:1200px; margin:0 auto; padding:0 24px 40px;
+    font-size:12px; color:var(--mist); line-height:1.6;
+  }
+</style>
+</head>
+<body>
+
+<div class="contour-band">
+  <svg viewBox="0 0 1200 200" preserveAspectRatio="none">
+    <path d="M0,140 Q150,90 300,140 T600,130 T900,150 T1200,120" stroke="#fff" fill="none" stroke-width="1.5"/>
+    <path d="M0,170 Q150,120 300,170 T600,160 T900,180 T1200,150" stroke="#fff" fill="none" stroke-width="1.5"/>
+    <path d="M0,110 Q150,60 300,110 T600,100 T900,120 T1200,90" stroke="#fff" fill="none" stroke-width="1.5"/>
+    <path d="M0,60 Q150,20 300,60 T600,50 T900,70 T1200,40" stroke="#fff" fill="none" stroke-width="1.5"/>
+  </svg>
+  <div class="header-inner">
+    <div>
+      <div class="brand-eyebrow">Field register — outdoor play, Scotland</div>
+      <h1>Braw Parks<br><em>a wee guide to Scotland's best playparks</em></h1>
+      <div class="tagline">Curated playparks from Gretna to Inverness — filter by region, age and features, mark off the ones you've been to, and find somewhere new for Saturday.</div>
+    </div>
+    <div class="stat-tag" id="statTag">34 parks · 11 regions</div>
+  </div>
+</div>
+
+<div class="controls-wrap">
+  <div class="toolbar">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Search by name or town…">
+    </div>
+    <select id="regionFilter"><option value="">All regions</option></select>
+    <select id="ageFilter">
+      <option value="">Any age</option>
+      <option value="toddler">Toddler (0–4)</option>
+      <option value="junior">Junior (5–8)</option>
+      <option value="senior">Older kids (9+)</option>
+    </select>
+    <div class="view-toggle">
+      <button id="btnList" class="active">☰ List</button>
+      <button id="btnMap">🗺 Map</button>
+    </div>
+  </div>
+  <div class="chip-row" id="chipRow"></div>
+  <div class="result-count" id="resultCount"></div>
+</div>
+
+<div class="sponsor-banner" id="sponsorBanner"></div>
+
+<main>
+  <div id="listView" class="active"></div>
+  <div id="mapView">
+    <div id="leafletMap"></div>
+    <div class="map-legend">
+      <span><span class="dot" style="background:#42583a"></span> Free entry</span>
+      <span><span class="dot" style="background:#c17a2e"></span> Paid / donation entry</span>
+      <span><span class="dot" style="background:#9b5f8f"></span> Marked as visited</span>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Curated starter list, not exhaustive — always check the venue's own page for current opening hours and access before travelling. "Visited" marks are saved to this app only, on this device.
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ============================================================
+   SPONSOR CONFIG — edit this block to add/change the sponsor.
+   Set SPONSOR to null to show the "advertise here" placeholder.
+   For a "featured" park (paid placement), add sponsoredBy: "Brand Name"
+   to that park's object further down in the PARKS array — it'll get
+   a tag and float to the top of the list.
+   ============================================================ */
+const SPONSOR = null;
+/* Example of a live sponsor — uncomment and fill in to use:
+const SPONSOR = {
+  name: "Tiso Outdoor",
+  message: "Kitted out for whatever the weather does. <strong>10% off kids' waterproofs</strong> for Braw Parks visitors.",
+  url: "https://www.tiso.com",
+  logo: "https://example.com/tiso-logo.png" // optional, omit if none
+};
+*/
+
+const PARKS = [
+  {id:"weehailes", name:"Weehailes Adventure Play Park", town:"Newhailes House, Musselburgh", region:"Edinburgh & Lothians", lat:55.9438, lng:-3.0578, age:["toddler","junior"], features:["adventure","cafe"], entry:"paid", blurb:"NTS playpark themed on the Scottish Enlightenment — a library to climb, servants' tunnels and a maze village."},
+  {id:"victoriapark", name:"Victoria Park", town:"Trinity, Edinburgh", region:"Edinburgh & Lothians", lat:55.9749, lng:-3.2280, age:["toddler","junior"], features:["free"], entry:"free", blurb:"Popular neighbourhood park with a well-kept playground and open grass for a kickabout after."},
+  {id:"vogrie", name:"Vogrie Country Park", town:"Gorebridge, Midlothian", region:"Edinburgh & Lothians", lat:55.8371, lng:-3.0611, age:["toddler","junior","senior"], features:["free","adventure"], entry:"free", blurb:"Large country park playground set in woodland and walking trails, with plenty of space to roam."},
+  {id:"lauriston", name:"Lauriston Castle Playpark", town:"Davidson's Mains, Edinburgh", region:"Edinburgh & Lothians", lat:55.9698, lng:-3.2681, age:["toddler","junior"], features:["free","cafe"], entry:"free", blurb:"Castle grounds with sweeping Forth views, a solid playpark and a walled garden to wander."},
+  {id:"cuningar", name:"Cuningar Loop", town:"Rutherglen, Glasgow", region:"Glasgow & Clyde Valley", lat:55.8272, lng:-4.2005, age:["junior","senior"], features:["free","adventure"], entry:"free", blurb:"Reclaimed woodland loop by the Clyde with natural play trails, dens and river views."},
+  {id:"robertson", name:"Robertson Park", town:"Milngavie, Glasgow", region:"Glasgow & Clyde Valley", lat:55.9418, lng:-4.3187, age:["toddler","junior"], features:["free"], entry:"free", blurb:"Varied playpark plus a skate park and a pond with swans — good all-rounder for a couple of hours."},
+  {id:"calderglen", name:"Calderglen Country Park", town:"East Kilbride", region:"Glasgow & Clyde Valley", lat:55.7508, lng:-4.1503, age:["toddler","junior","senior"], features:["free","adventure"], entry:"free", blurb:"One of the biggest playparks in the area, set inside a country park with a small zoo and gorge walks."},
+  {id:"newlanark", name:"New Lanark Riverside Play Area", town:"New Lanark, South Lanarkshire", region:"South Lanarkshire", lat:55.6706, lng:-3.7842, age:["toddler","junior"], features:["free"], entry:"free", blurb:"Playpark by the Falls of Clyde, with the UNESCO mill village and river walks right on the doorstep."},
+  {id:"pollok", name:"Pollok Country Park Play Area", town:"Pollokshaws, Glasgow", region:"Glasgow & Clyde Valley", lat:55.8298, lng:-4.3145, age:["toddler","junior"], features:["free"], entry:"free", blurb:"Playground within Glasgow's largest park, close to Pollok House and Highland cattle grazing."},
+  {id:"culzean", name:"Adventure Cove & Wild Woodland", town:"Culzean Castle, Maybole", region:"Ayrshire & Arran", lat:55.3548, lng:-4.7906, age:["toddler","junior","senior"], features:["adventure","cafe"], entry:"paid", blurb:"Regularly rated among Scotland's best playparks — towers, treehouses, zip slides and a smugglers' cove theme."},
+  {id:"eglinton", name:"Eglinton Country Park", town:"Irvine, Ayrshire", region:"Ayrshire & Arran", lat:55.6169, lng:-4.6683, age:["toddler","junior"], features:["free"], entry:"free", blurb:"Playpark set among the ruins of Eglinton Castle, with woodland trails and a walled garden nearby."},
+  {id:"rozelle", name:"Rozelle Park", town:"Ayr", region:"Ayrshire & Arran", lat:55.4547, lng:-4.6144, age:["toddler","junior"], features:["free","cafe"], entry:"free", blurb:"Woodland park playground with a sculpture trail and galleries — easy combo of play and a wander."},
+  {id:"kelpies", name:"The Kelpies Playpark", town:"Falkirk", region:"Forth Valley & Trossachs", lat:56.0011, lng:-3.7422, age:["toddler","junior"], features:["free","wheelchair"], entry:"free", blurb:"Fully wheelchair-friendly playpark next to the giant horse-head sculptures — free and always open.", },
+  {id:"falkirkwheel", name:"Falkirk Wheel Splash Park & Playpark", town:"Falkirk", region:"Forth Valley & Trossachs", lat:56.0000, lng:-3.8408, age:["toddler","junior"], features:["splash","free"], entry:"free", blurb:"Free splash park alongside a playpark, right beside the rotating boat lift — bring towels on a sunny day."},
+  {id:"blairdrummond", name:"Blair Drummond Safari Park Play Area", town:"Stirling", region:"Forth Valley & Trossachs", lat:56.1444, lng:-4.0819, age:["toddler","junior","senior"], features:["adventure","cafe"], entry:"paid", blurb:"Playpark and astroglide slide bundled in with a full safari park day — animals, boats and rides too."},
+  {id:"aberfoyle", name:"Aberfoyle Play Park", town:"Aberfoyle, Trossachs", region:"Forth Valley & Trossachs", lat:56.1789, lng:-4.3897, age:["toddler","junior"], features:["free"], entry:"free", blurb:"Handy village playpark just off the main street with a flying fox, right on the NCN7 cycle route."},
+  {id:"beecraigs", name:"Beecraigs Country Park", town:"Linlithgow, West Lothian", region:"Edinburgh & Lothians", lat:55.9553, lng:-3.6153, age:["toddler","junior","senior"], features:["free","adventure"], entry:"free", blurb:"Loch, farm animals and forest trails around a solid playpark — good full-day country park option."},
+  {id:"chatelherault", name:"Chatelherault Country Park", town:"Hamilton, South Lanarkshire", region:"South Lanarkshire", lat:55.7614, lng:-4.0336, age:["toddler","junior","senior"], features:["free","adventure"], entry:"free", blurb:"Big adventure-style playpark below the hunting lodge, with gorge walks and woodland trails beyond."},
+  {id:"strathclyde", name:"Strathclyde Country Park Playpark", town:"Motherwell, South Lanarkshire", region:"South Lanarkshire", lat:55.7972, lng:-3.9967, age:["toddler","junior"], features:["free","splash"], entry:"free", blurb:"Loch-side playpark with splash play in summer, plus watersports and a theme park next door."},
+  {id:"dumfrieshouse", name:"Engineering Playpark", town:"Dumfries House, Cumnock", region:"Ayrshire & Arran", lat:55.4536, lng:-4.3775, age:["toddler","junior","senior"], features:["splash","adventure","cafe"], entry:"paid", blurb:"Water-play focused adventure playground set in the grand grounds of Dumfries House."},
+  {id:"drumlanrig", name:"Drumlanrig Castle Playpark", town:"Thornhill, Dumfries & Galloway", region:"Dumfries & Galloway", lat:55.2694, lng:-3.8125, age:["toddler","junior"], features:["adventure","cafe"], entry:"paid", blurb:"Playpark in the castle's wooded grounds, with cycle trails and falconry displays close by."},
+  {id:"castledouglas", name:"Castle Douglas Play Area", town:"Castle Douglas, Dumfries & Galloway", region:"Dumfries & Galloway", lat:54.9411, lng:-3.9358, age:["toddler","junior"], features:["free"], entry:"free", blurb:"Straightforward town playpark near the loch — a reliable stop on the way through Galloway."},
+  {id:"landmark", name:"Landmark Forest Adventure Park", town:"Carrbridge, Highlands", region:"Highlands", lat:57.2833, lng:-3.7972, age:["toddler","junior","senior"], features:["adventure","cafe"], entry:"paid", blurb:"Treetop towers, tree-top trail and Scotland's tallest tower slide, deep in Speyside forest."},
+  {id:"bught", name:"Bught Park Playpark", town:"Inverness", region:"Highlands", lat:57.4692, lng:-4.2358, age:["toddler","junior"], features:["free"], entry:"free", blurb:"Riverside playpark by the Ness Islands, an easy stop on a walk along the River Ness."},
+  {id:"lochoremeadows", name:"Lochore Meadows Play Park", town:"Lochgelly, Fife", region:"Fife", lat:56.1483, lng:-3.3111, age:["toddler","junior","senior"], features:["free","adventure","wheelchair"], entry:"free", blurb:"Recently revamped with big slides, trampolines and Scotland's first sensory dome for accessible play."},
+  {id:"craigtoun", name:"Craigtoun Country Park", town:"St Andrews, Fife", region:"Fife", lat:56.3269, lng:-2.8331, age:["toddler","junior"], features:["adventure","cafe"], entry:"paid", blurb:"Playpark plus a miniature railway and boating pond — a classic old-school day out."},
+  {id:"beveridge", name:"Beveridge Park", town:"Kirkcaldy, Fife", region:"Fife", lat:56.1178, lng:-3.1636, age:["toddler","junior"], features:["free"], entry:"free", blurb:"Long-standing town park with a playpark, boating pond and open space for a run-around."},
+  {id:"camperdown", name:"Camperdown Park Playpark", town:"Dundee", region:"Dundee, Angus & Perth", lat:56.4939, lng:-3.0053, age:["toddler","junior"], features:["free"], entry:"free", blurb:"Free playpark next to Camperdown Wildlife Centre, set in mature woodland on Dundee's edge."},
+  {id:"castlegreen", name:"Castle Green Play Park", town:"Broughty Ferry, Dundee", region:"Dundee, Angus & Perth", lat:56.4675, lng:-2.8794, age:["toddler","junior"], features:["splash","free","cafe"], entry:"free", blurb:"Splash zone plus tube slides and rope swings right next to Broughty Castle, with a café on site."},
+  {id:"duthie", name:"Duthie Park Play Area", town:"Aberdeen", region:"Aberdeen & Aberdeenshire", lat:57.1372, lng:-2.0994, age:["toddler","junior"], features:["free","cafe"], entry:"free", blurb:"Playground within the Winter Gardens park — glasshouses and riverside paths alongside it."},
+  {id:"johnstongardens", name:"Johnston Gardens", town:"Aberdeen", region:"Aberdeen & Aberdeenshire", lat:57.1441, lng:-2.1367, age:["toddler"], features:["free"], entry:"free", blurb:"Small, sheltered garden playground — a gentle option for younger toddlers, tucked away from traffic."},
+  {id:"hazlehead", name:"Hazlehead Park", town:"Aberdeen", region:"Aberdeen & Aberdeenshire", lat:57.1364, lng:-2.1806, age:["toddler","junior","senior"], features:["free","adventure"], entry:"free", blurb:"Large park with a playground, hedge maze and pitch-and-putt for a longer family outing."},
+  {id:"haddo", name:"Haddo Country Park", town:"Tarves, Aberdeenshire", region:"Aberdeen & Aberdeenshire", lat:57.3958, lng:-2.3242, age:["toddler","junior"], features:["free","adventure"], entry:"free", blurb:"Estate parkland playground with lake walks and events throughout the year."},
+  {id:"bowhill", name:"Bowhill House Play Area", town:"Selkirk, Scottish Borders", region:"Scottish Borders", lat:55.5486, lng:-2.9236, age:["toddler","junior","senior"], features:["adventure","cafe"], entry:"paid", blurb:"Adventure playground in Bowhill's estate grounds, with waymarked cycling and walking trails around it."}
+];
+
+const FEATURE_LABELS = {
+  splash:"Splash play", adventure:"Big adventure play", wheelchair:"Wheelchair friendly",
+  cafe:"Café nearby", free:"Free entry"
+};
+const AGE_LABELS = {toddler:"Toddler 0–4", junior:"Junior 5–8", senior:"Older kids 9+"};
+
+let visited = new Set();
+let photos = {}; // { parkId: [url, url, ...] }
+let state = {search:"", region:"", age:"", features:new Set(), view:"list"};
+let map, markerLayer;
+let activeModalParkId = null;
+
+async function loadVisited(){
+  try{
+    const r = await window.storage.get('braw-parks-visited');
+    if(r && r.value) visited = new Set(JSON.parse(r.value));
+  }catch(e){ /* no saved data yet */ }
+}
+async function saveVisited(){
+  try{ await window.storage.set('braw-parks-visited', JSON.stringify([...visited])); }
+  catch(e){ console.error('save failed', e); }
+}
+
+async function loadPhotos(){
+  try{
+    const r = await window.storage.get('braw-parks-photos');
+    if(r && r.value) photos = JSON.parse(r.value);
+  }catch(e){ /* no saved data yet */ }
+}
+async function savePhotos(){
+  try{ await window.storage.set('braw-parks-photos', JSON.stringify(photos)); }
+  catch(e){ console.error('save failed', e); }
+}
+
+function imageSearchUrl(p){
+  return `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(p.name + ' ' + p.town + ' playpark')}`;
+}
+
+function isLikelyImageUrl(url){
+  try{
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  }catch(e){ return false; }
+}
+
+function populateRegionFilter(){
+  const regions = [...new Set(PARKS.map(p=>p.region))].sort();
+  const sel = document.getElementById('regionFilter');
+  regions.forEach(r=>{
+    const o = document.createElement('option'); o.value=r; o.textContent=r; sel.appendChild(o);
+  });
+}
+
+function buildChips(){
+  const row = document.getElementById('chipRow');
+  Object.entries(FEATURE_LABELS).forEach(([key,label])=>{
+    const chip = document.createElement('div');
+    chip.className='chip'; chip.textContent=label; chip.dataset.key=key;
+    chip.onclick=()=>{
+      if(state.features.has(key)) state.features.delete(key); else state.features.add(key);
+      chip.classList.toggle('on');
+      render();
+    };
+    row.appendChild(chip);
+  });
+}
+
+function filterParks(){
+  const filtered = PARKS.filter(p=>{
+    if(state.search){
+      const q = state.search.toLowerCase();
+      if(!p.name.toLowerCase().includes(q) && !p.town.toLowerCase().includes(q)) return false;
+    }
+    if(state.region && p.region !== state.region) return false;
+    if(state.age && !p.age.includes(state.age)) return false;
+    for(const f of state.features){ if(!p.features.includes(f)) return false; }
+    return true;
+  });
+  return filtered.sort((a,b)=> (b.sponsoredBy?1:0) - (a.sponsoredBy?1:0));
+}
+
+function renderSponsorBanner(){
+  const el = document.getElementById('sponsorBanner');
+  if(SPONSOR){
+    el.innerHTML = `
+      <div class="sponsor-inner">
+        <span class="sponsor-eyebrow">Sponsored</span>
+        ${SPONSOR.logo ? `<img class="sponsor-logo" src="${SPONSOR.logo}" alt="${SPONSOR.name} logo">` : ''}
+        <div class="sponsor-text"><strong>${SPONSOR.name}</strong> — ${SPONSOR.message}</div>
+        <a class="sponsor-link" href="${SPONSOR.url}" target="_blank" rel="noopener sponsored">Visit ↗</a>
+      </div>`;
+  } else {
+    el.innerHTML = `<div class="sponsor-empty">This spot is reserved for a sponsor — <a href="mailto:?subject=Braw%20Parks%20sponsorship">get in touch to advertise here</a>.</div>`;
+  }
+}
+
+function directionsUrl(p){
+  return `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
+}
+
+function renderList(parks){
+  const el = document.getElementById('listView');
+  el.innerHTML='';
+  if(parks.length===0){
+    el.innerHTML = `<div class="empty-state">No parks match those filters yet — try widening the search.</div>`;
+    return;
+  }
+  parks.forEach(p=>{
+    const isVisited = visited.has(p.id);
+    const parkPhotos = photos[p.id] || [];
+    const card = document.createElement('div');
+    card.className='card' + (p.sponsoredBy ? ' is-featured' : '');
+    card.innerHTML = `
+      <div class="card-top">
+        <div>
+          <span class="card-region">${p.region}</span>
+          ${p.sponsoredBy ? `<div class="featured-tag">Featured by ${p.sponsoredBy}</div>` : ''}
+          <h3>${p.name}</h3>
+          <div class="town">${p.town}</div>
+        </div>
+        <button class="visited-btn ${isVisited?'on':''}" title="Mark as visited" data-id="${p.id}">${isVisited?'✓':'☐'}</button>
+      </div>
+      <p class="blurb">${p.blurb}</p>
+      <div class="photo-strip" data-id="${p.id}">
+        ${parkPhotos.map((url,i)=>`
+          <div class="photo-thumb" data-url="${url}">
+            <img src="${url}" alt="${p.name} photo" loading="lazy" onerror="this.closest('.photo-thumb').style.opacity='0.3'">
+            <button class="remove-photo" data-id="${p.id}" data-idx="${i}" title="Remove">×</button>
+          </div>`).join('')}
+        <button class="photo-add-tile" data-id="${p.id}" data-name="${p.name.replace(/"/g,'&quot;')}" title="Add your own photo">
+          <span class="plus">+</span><span>Add</span>
+        </button>
+      </div>
+      <div class="tag-row">
+        <span class="tag ${p.entry==='free'?'free':'paid'}">${p.entry==='free'?'Free entry':'Paid entry'}</span>
+        ${p.features.filter(f=>f!=='free').map(f=>`<span class="tag">${FEATURE_LABELS[f]}</span>`).join('')}
+      </div>
+      <div class="card-foot">
+        <span class="age-badge">${p.age.map(a=>AGE_LABELS[a].split(' ')[0]).join(' · ')}</span>
+        <a class="search-photos-link" href="${imageSearchUrl(p)}" target="_blank" rel="noopener">Search photos ↗</a>
+        <a class="directions" href="${directionsUrl(p)}" target="_blank" rel="noopener">Directions →</a>
+      </div>
+    `;
+    card.querySelector('.visited-btn').onclick = async (e)=>{
+      const id = e.currentTarget.dataset.id;
+      if(visited.has(id)) visited.delete(id); else visited.add(id);
+      await saveVisited();
+      render();
+    };
+    card.querySelectorAll('.photo-thumb img').forEach(img=>{
+      img.onclick = ()=> openLightbox(img.src);
+    });
+    card.querySelectorAll('.remove-photo').forEach(btn=>{
+      btn.onclick = async (e)=>{
+        e.stopPropagation();
+        const id = btn.dataset.id, idx = parseInt(btn.dataset.idx,10);
+        photos[id].splice(idx,1);
+        await savePhotos();
+        render();
+      };
+    });
+    const addTile = card.querySelector('.photo-add-tile');
+    addTile.onclick = ()=> openPhotoModal(addTile.dataset.id, addTile.dataset.name);
+    el.appendChild(card);
+  });
+}
+
+function initMap(){
+  map = L.map('leafletMap', {scrollWheelZoom:true}).setView([56.6, -4.2], 6.3);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'&copy; OpenStreetMap contributors',
+    maxZoom:18
+  }).addTo(map);
+  markerLayer = L.layerGroup().addTo(map);
+}
+
+function colorFor(p){
+  if(visited.has(p.id)) return '#9b5f8f';
+  return p.entry==='free' ? '#42583a' : '#c17a2e';
+}
+
+function renderMap(parks){
+  markerLayer.clearLayers();
+  parks.forEach(p=>{
+    const marker = L.circleMarker([p.lat,p.lng], {
+      radius:8, weight:2, color:'#fbf7ee', fillColor:colorFor(p), fillOpacity:0.95
+    });
+    marker.bindPopup(`
+      <div class="popup-title">${p.name}</div>
+      <div class="popup-town">${p.town}</div>
+      <p class="popup-blurb">${p.blurb}</p>
+      <a class="popup-link" href="${imageSearchUrl(p)}" target="_blank" rel="noopener">Search photos ↗</a> ·
+      <a class="popup-link" href="${directionsUrl(p)}" target="_blank" rel="noopener">Directions →</a>
+    `);
+    marker.addTo(markerLayer);
+  });
+}
+
+function render(){
+  const parks = filterParks();
+  document.getElementById('resultCount').textContent = `Showing ${parks.length} of ${PARKS.length} parks${visited.size?` · ${visited.size} visited`:''}`;
+  if(state.view==='list'){ renderList(parks); }
+  else{ renderMap(parks); setTimeout(()=>map.invalidateSize(),50); }
+}
+
+function wireControls(){
+  document.getElementById('searchInput').oninput = (e)=>{ state.search=e.target.value; render(); };
+  document.getElementById('regionFilter').onchange = (e)=>{ state.region=e.target.value; render(); };
+  document.getElementById('ageFilter').onchange = (e)=>{ state.age=e.target.value; render(); };
+  document.getElementById('btnList').onclick = ()=>{
+    state.view='list';
+    document.getElementById('btnList').classList.add('active');
+    document.getElementById('btnMap').classList.remove('active');
+    document.getElementById('listView').classList.add('active');
+    document.getElementById('mapView').classList.remove('active');
+    render();
+  };
+  document.getElementById('btnMap').onclick = ()=>{
+    state.view='map';
+    document.getElementById('btnMap').classList.add('active');
+    document.getElementById('btnList').classList.remove('active');
+    document.getElementById('mapView').classList.add('active');
+    document.getElementById('listView').classList.remove('active');
+    render();
+  };
+}
+
+function openPhotoModal(parkId, parkName){
+  activeModalParkId = parkId;
+  document.getElementById('modalParkName').textContent = `Add a photo of ${parkName} — paste a link to an image (council page, NTS site, or your own).`;
+  document.getElementById('photoUrlInput').value = '';
+  document.getElementById('photoError').style.display = 'none';
+  document.getElementById('photoModal').classList.add('open');
+  document.getElementById('photoUrlInput').focus();
+}
+function closePhotoModal(){
+  document.getElementById('photoModal').classList.remove('open');
+  activeModalParkId = null;
+}
+async function savePhotoFromModal(){
+  const input = document.getElementById('photoUrlInput');
+  const url = input.value.trim();
+  const errEl = document.getElementById('photoError');
+  if(!isLikelyImageUrl(url)){
+    errEl.style.display = 'block';
+    return;
+  }
+  if(!photos[activeModalParkId]) photos[activeModalParkId] = [];
+  photos[activeModalParkId].push(url);
+  await savePhotos();
+  closePhotoModal();
+  render();
+}
+function openLightbox(src){
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox(){
+  document.getElementById('lightbox').classList.remove('open');
+  document.getElementById('lightboxImg').src = '';
+}
+
+function wirePhotoControls(){
+  document.getElementById('photoCancelBtn').onclick = closePhotoModal;
+  document.getElementById('photoSaveBtn').onclick = savePhotoFromModal;
+  document.getElementById('photoModal').onclick = (e)=>{ if(e.target.id==='photoModal') closePhotoModal(); };
+  document.getElementById('photoUrlInput').onkeydown = (e)=>{ if(e.key==='Enter') savePhotoFromModal(); };
+  document.getElementById('lightboxClose').onclick = closeLightbox;
+  document.getElementById('lightbox').onclick = (e)=>{ if(e.target.id==='lightbox') closeLightbox(); };
+  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ closeLightbox(); closePhotoModal(); } });
+}
+
+(async function init(){
+  await loadVisited();
+  await loadPhotos();
+  populateRegionFilter();
+  buildChips();
+  wireControls();
+  wirePhotoControls();
+  renderSponsorBanner();
+  initMap();
+  render();
+})();
+</script>
+<div class="modal-backdrop" id="photoModal">
+  <div class="modal-box">
+    <h4>Add a photo</h4>
+    <div class="sub" id="modalParkName">Paste a link to an image — from a council page, NTS site, or one you've taken yourself.</div>
+    <input type="text" id="photoUrlInput" placeholder="https://…jpg">
+    <div class="modal-error" id="photoError">That doesn't look like a valid image link — try again.</div>
+    <div class="modal-actions">
+      <button class="btn" id="photoCancelBtn">Cancel</button>
+      <button class="btn primary" id="photoSaveBtn">Add photo</button>
+    </div>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" id="lightboxClose">×</button>
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+</body>
+</html>
